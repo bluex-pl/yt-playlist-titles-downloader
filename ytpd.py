@@ -24,15 +24,45 @@ import sys
 from requests import get
 from urlparse import urlparse, parse_qs
 
+api_url = 'http://gdata.youtube.com/feeds/api'
+
 
 def main():
-    playlist_url = sys.argv[1] if len(sys.argv) > 1 else raw_input('Playlist url: ')
+    url = sys.argv[1] if len(sys.argv) > 1 else raw_input('URL: ')
     try:
-        playlist_id = parse_qs(urlparse(playlist_url).query)['list'][0]
-    except KeyError:
-        print "Can't find playlist id in url"
+        url_parts = urlparse(url)
+        path_parts = url_parts.path.split('/')
+        if path_parts[1] == 'user':
+            print 'parsing user'
+            parse_user(path_parts[2])
+        elif path_parts[1] == 'playlist':
+            print 'parsing playlist'
+            parse_playlist(parse_qs(url_parts.query)['list'][0])
+    except (KeyError, IndexError):
+        print "unknown URL format"
+
+
+def parse_user(user_id):
+    url_template = '/'.join((api_url, 'users', user_id, 'playlists'))
+    url_params = {
+        'max-results': 50,
+        #'prettyprint': 'true',
+        'alt': 'jsonc',
+        'v': '2',
+    }
+    print 'downloading'
+    r = get(url_template, params=url_params)
+    if r.status_code != 200:
+        print r.text
         return
-    url_template = 'http://gdata.youtube.com/feeds/api/playlists/{}'.format(playlist_id)
+    data = r.json()['data']
+    for item in data['items']:
+        print 'playlist: {}'.format(item['title'])
+        parse_playlist(item['id'])
+
+
+def parse_playlist(playlist_id):
+    url_template = '/'.join((api_url, 'playlists', playlist_id))
     url_params = {
         'start-index': 1,
         'max-results': 50,

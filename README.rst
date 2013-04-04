@@ -11,7 +11,7 @@ will fetch playlist info in a few parts and store video titles in a text file wi
 Requirements
 ------------
 
-* `Requests <python-requests.org>`_
+* `Requests <http://python-requests.org/>`_
 
 
 Credits

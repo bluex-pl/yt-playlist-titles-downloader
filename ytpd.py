@@ -25,6 +25,11 @@ from requests import get
 from urlparse import urlparse, parse_qs
 
 api_url = 'http://gdata.youtube.com/feeds/api'
+api_params = {
+    #'prettyprint': 'true',
+    'alt': 'jsonc',
+    'v': '2',
+}
 
 
 def main():
@@ -42,54 +47,53 @@ def main():
         print "unknown URL format"
 
 
-def parse_user(user_id):
-    url_template = '/'.join((api_url, 'users', user_id, 'playlists'))
-    url_params = {
-        'max-results': 50,
-        #'prettyprint': 'true',
-        'alt': 'jsonc',
-        'v': '2',
-    }
-    print 'downloading'
-    r = get(url_template, params=url_params)
+def get_json(*args, **kwargs):
+    r = get(*args, **kwargs)
     if r.status_code != 200:
         print r.text
-        return
-    data = r.json()['data']
-    for item in data['items']:
-        print 'playlist: {}'.format(item['title'])
-        parse_playlist(item['id'])
+        return {}
+    return r.json()
+
+
+def parse_info(url, params={}):
+    params = dict(api_params, **params)
+    params['max-results'] = 0
+    return get_json(url, params=params)['data']
+
+
+def parse_partial(url, params={}, start=1, total=None, ipp=50):
+    params = dict(api_params, **params)
+    params['max-results'] = ipp
+    total = parse_info(url, params)['totalItems'] if total is None else total
+    for current in range(start, total, ipp):
+        print 'downloading {}/{}'.format(current, total)
+        part_params = dict(params, **{'start-index': current})
+        data = get_json(url, params=part_params)['data']
+        for item in data['items']:
+            yield item
+
+
+def parse_user(user_id):
+    url = '/'.join((api_url, 'users', user_id, 'playlists'))
+    try:
+        items = parse_partial(url)
+        for item in items:
+            print 'playlist: {title}'.format(**item)
+            parse_playlist(item['id'])
+    except KeyError as e:
+        print 'Data error: {}'.format(e)
 
 
 def parse_playlist(playlist_id):
-    url_template = '/'.join((api_url, 'playlists', playlist_id))
-    url_params = {
-        'start-index': 1,
-        'max-results': 50,
-        #'prettyprint': 'true',
-        #'fields': 'entry(title)',
-        'alt': 'jsonc',
-        'v': '2',
-    }
-    current = 1
-    total = 2
-    f = None
+    url = '/'.join((api_url, 'playlists', playlist_id))
     try:
-        while current < total:
-            print 'downloading'
-            r = get(url_template, params=url_params)
-            if r.status_code != 200:
-                print r.text
-                return
-            data = r.json()['data']
-            f = f if f is not None else open('{}.txt'.format(data['title']), 'w')
-            for item in data['items']:
-                f.write(item['video']['title'].encode('utf8') + '\n')
-            current = data['startIndex'] + data['itemsPerPage']
-            total = data['totalItems']
-            url_params['start-index'] = current
+        info = parse_info(url)
+        f = open('{title}.txt'.format(**info), 'w')
+        items = parse_partial(url, total=info['totalItems'])
+        for item in items:
+            f.write(item['video']['title'].encode('utf8') + '\n')
     except KeyError as e:
-        print "Data error: {}".format(e)
+        print 'Data error: {}'.format(e)
     finally:
         f.close()
 

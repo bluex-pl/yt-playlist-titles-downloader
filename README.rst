@@ -22,6 +22,7 @@ Small script that saves all video titles from YouTube playlist.
 Requirements
 ------------
 
+* Python 3.3
 * `Requests <http://python-requests.org/>`_
 
 
